@@ -15,7 +15,8 @@ dependencies = [
     "pandas>=2.3",
     "pymatreader>=1.1",
     "Requests>=2.32",
-    "scipy>=1.16"
+    "scipy>=1.16",
+    "toml",
 ]
 
 [tool.setuptools]

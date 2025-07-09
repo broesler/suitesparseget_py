@@ -13,6 +13,7 @@ import pandas as pd
 import re
 import requests
 import tarfile
+import toml
 import warnings
 import webbrowser
 
@@ -23,12 +24,68 @@ from scipy import sparse
 from scipy.io import loadmat, hb_read, mmread
 
 
-# TODO move this to a config.py file
-SS_DIR = Path.home() / ".suitesparseget"
-
 SS_ROOT_URL = "https://sparse.tamu.edu"
 SS_INDEX_URL = f"{SS_ROOT_URL}/files/ss_index.mat"
 SSSTATS_CSV_URL = f"{SS_ROOT_URL}/files/ssstats.csv"
+
+DEFAULT_CONFIG = {'paths': {'data_directory': Path.home() / '.suitesparseget'}}
+
+
+def _load_config():
+    """Load the SuiteSparse configuration from a TOML file.
+
+    This function looks for a configuration file named `suitesparseget.toml`
+    in:
+
+    1. the current directory,
+    2. the user's home directory, or
+    3. the default data directory (`~/.suitesparseget`).
+
+    If the file is found, it loads the configuration and returns it
+    as a dictionary. If the file is not found, it returns the default
+    configuration.
+    """
+    current_config = DEFAULT_CONFIG.copy()
+
+    # Look for the configuration file in the current directory
+    config_filename = 'suitesparseget.toml'
+
+    dirs_to_check = [
+        Path.cwd(),
+        Path.home(),
+        DEFAULT_CONFIG['paths']['data_directory']
+    ]
+
+    loaded_from_path = None
+
+    for directory in dirs_to_check:
+        config_path = Path(directory) / config_filename
+        if config_path.exists():
+            loaded_from_path = config_path
+            break
+
+    if loaded_from_path:
+        try:
+            with config_path.open('r') as fp:
+                config_data = toml.load(fp)
+                current_config.update(config_data)
+        except toml.TomlDecodeError as e:
+            print(f"Error parsing configuration file: {e}")
+            raise e
+
+    return current_config
+
+
+# Load the configuration
+_app_config = _load_config()
+
+# Set the data directory from the configuration
+_data_path = Path(_app_config['paths']['data_directory'])
+
+SS_DIR = _data_path if _data_path.is_absolute() else Path.home() / _data_path
+
+# Ensure the data directory exists
+SS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @dataclass(frozen=True)
@@ -157,7 +214,6 @@ def get_index():
     index_mat = SS_DIR / "ss_index.mat"
 
     if not index_mat.exists():
-        SS_DIR.mkdir(parents=True, exist_ok=True)
         _download_file(SS_INDEX_URL, index_mat)
 
     mat = loadmat(index_mat)
