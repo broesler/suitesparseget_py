@@ -22,7 +22,7 @@ if __name__ == "__main__":
 
     for _, row in tf.iterrows():
         # Load the actual matrix
-        problem = ssg.get_problem_from_row(row, fmt='mat')
+        problem = ssg.get_problem(row=row, fmt='mat')
 
         # Get all field names
         new_names = {x.name for x in fields(problem)} - fieldnames

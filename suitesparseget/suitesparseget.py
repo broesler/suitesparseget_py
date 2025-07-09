@@ -22,7 +22,6 @@ from pymatreader import read_mat
 from scipy import sparse
 from scipy.io import loadmat, hb_read, mmread
 
-# TODO refactor into own package
 
 # TODO move this to a config.py file
 SS_DIR = Path.home() / ".suitesparseget"
@@ -130,7 +129,7 @@ class MatrixSVDs:
     status : str = None
 
 
-def download_file(url, path):
+def _download_file(url, path):
     """Download a file from a URL and save it to the specified path."""
     try:
         # Make any subdirectories
@@ -159,7 +158,7 @@ def get_index():
 
     if not index_mat.exists():
         SS_DIR.mkdir(parents=True, exist_ok=True)
-        download_file(SS_INDEX_URL, index_mat)
+        _download_file(SS_INDEX_URL, index_mat)
 
     mat = loadmat(index_mat)
     ss_index = mat['ss_index'][0][0]  # structured numpy array
@@ -272,7 +271,7 @@ def get_stats():
 
     if not stats_csv.exists():
         SS_DIR.mkdir(parents=True, exist_ok=True)
-        download_file(SSSTATS_CSV_URL, stats_csv)
+        _download_file(SSSTATS_CSV_URL, stats_csv)
 
     # -------------------------------------------------------------------------
     #         Load the CSV file into a DataFrame
@@ -312,7 +311,7 @@ def get_stats():
     return df
 
 
-def check_index_vs_csv():
+def _check_index_vs_csv():
     """Check if the index DataFrame is valid vs. the 'ssstats.csv' file.
 
     Returns
@@ -329,7 +328,7 @@ def check_index_vs_csv():
 
 
 
-def parse_header(path):
+def _parse_header(path):
     r"""Parse the header of a SuiteSparse matrix file.
 
     The top of a MatrixMarket file will look like this:
@@ -435,7 +434,7 @@ def parse_header(path):
     return metadata
 
 
-def load_matfile_ltv73(matrix_path):
+def _load_matfile_ltv73(matrix_path):
     """Load a MAT-file with version < 7.3 using the scipy.io.loadmat.
 
     Parameters
@@ -490,7 +489,7 @@ def load_matfile_ltv73(matrix_path):
     return data
 
 
-def load_matfile_gev73(matrix_path):
+def _load_matfile_gev73(matrix_path):
     """Load a MAT-file with version >= 7.3 using the scipy.io.loadmat.
 
     Parameters
@@ -537,7 +536,7 @@ def load_problem(matrix_path):
         A = mmread(matrix_path)
         rhs_path = matrix_path.with_stem(matrix_path.stem + '_b')
         b = mmread(rhs_path) if rhs_path.exists() else None
-        metadata = parse_header(matrix_path)
+        metadata = _parse_header(matrix_path)
 
         return MatrixProblem(A=A, b=b, **metadata)
 
@@ -556,16 +555,16 @@ def load_problem(matrix_path):
         )
         b = mmread(rhs_path) if rhs_path.exists() else None
 
-        metadata = parse_header(matrix_path.with_suffix('.txt'))
+        metadata = _parse_header(matrix_path.with_suffix('.txt'))
 
         return MatrixProblem(A=A, b=b, **metadata)
 
     elif fmt == '.mat':
         # NOTE scipy.io.loadmat does not support v7.3+ MAT-files
         try:
-            data = load_matfile_ltv73(matrix_path)
+            data = _load_matfile_ltv73(matrix_path)
         except NotImplementedError:
-            data = load_matfile_gev73(matrix_path)
+            data = _load_matfile_gev73(matrix_path)
 
         return MatrixProblem(**data)
 
@@ -613,11 +612,15 @@ def get_row(index=None, mat_id=None, group=None, name=None):
         row['group'] = group
         row['name'] = name
 
+    # TODO ensure row is unique
+
     return row
 
 
-def download_matrix(row, fmt='mat'):
+def _download_matrix(row, fmt='mat'):
     """Download a SuiteSparse matrix file based on the index row.
+
+    If the matrix file already exists, just return the path.
 
     Parameters
     ----------
@@ -656,7 +659,7 @@ def download_matrix(row, fmt='mat'):
     ).with_suffix(mat_ext)
 
     if not local_tar_path.exists():
-        download_file(url, local_tar_path)
+        _download_file(url, local_tar_path)
 
     if has_tar and not local_matrix_file.exists():
         with tarfile.open(local_tar_path, 'r:gz') as tar:
@@ -669,11 +672,16 @@ def download_matrix(row, fmt='mat'):
     return local_matrix_file
 
 
-def get_problem(index=None, mat_id=None, group=None, name=None, fmt='mat'):
-    """Get a SuiteSparse matrix problem by ID, or group and name.
+def get_problem(row=None, index=None, mat_id=None, group=None, name=None, fmt='mat'):
+    """Get a SuiteSparse matrix problem by row, ID, or group and name.
+
+    Either pass `row` alone, or `index` and either `mat_id` or the pair
+    (`group`, `name`).
 
     Parameters
     ----------
+    row : Series
+        A row from the SuiteSparse index DataFrame containing the matrix.
     index : DataFrame
         The DataFrame containing the SuiteSparse index.
     mat_id : int
@@ -692,55 +700,12 @@ def get_problem(index=None, mat_id=None, group=None, name=None, fmt='mat'):
     """
     if fmt not in ['MM', 'RB', 'mat']:
         raise ValueError("Format must be one of 'MM', 'RB', 'mat'.")
-    row = get_row(index=index, mat_id=mat_id, group=group, name=name)
-    return get_problem_from_row(row, fmt=fmt)
 
+    if row is None:
+        row = get_row(index=index, mat_id=mat_id, group=group, name=name)
 
-def get_problem_from_row(row, fmt='mat'):
-    """Get a SuiteSparse matrix problem from a DataFrame row.
+    matrix_file = _download_matrix(row, fmt=fmt)
 
-    This function is useful for iterating over rows in the SuiteSparse index,
-    typically after filtering to a desired subset.
-
-    .. code::
-        for index, row in df.iterrows():
-            problem = get_problem_from_row(row, fmt='mat')
-            A = problem.A
-            # ... operate on the matrix ...
-
-    It skips the checks and re-indexing used by `get_problem`, so it is
-    faster when iterating.
-
-    Parameters
-    ----------
-    row : Series
-        A row from the SuiteSparse index DataFrame containing the matrix.
-    fmt : str in {'MM', 'RB', 'mat'}, optional
-        The format of the matrix file to download. Defaults to 'mat'.
-
-    Returns
-    -------
-    MatrixProblem
-        The matrix problem instance containing the matrix and its metadata.
-    """
-    matrix_file = download_matrix(row, fmt=fmt)
-    return load_problem(matrix_file)
-
-
-def get_problem_from_file(matrix_file):
-    """Get a SuiteSparse matrix problem from a file path.
-
-    Parameters
-    ----------
-    matrix_file : str or Path
-        The path to the matrix file. It can be a MatrixMarket (.mtx),
-        Rutherford-Boeing (.rb), or MATLAB (.mat) file.
-
-    Returns
-    -------
-    MatrixProblem
-        The matrix problem instance containing the matrix and its metadata.
-    """
     return load_problem(matrix_file)
 
 
@@ -791,16 +756,16 @@ def get_svds(index=None, mat_id=None, group=None, name=None):
 
     if not local_filename.exists():
         try:
-            download_file(url, local_filename)
+            _download_file(url, local_filename)
         except requests.exceptions.RequestException as e:
             print(f"Error downloading SVD file: {e}")
             raise e
 
     # Load the SVD data
     try:
-        data = load_matfile_ltv73(local_filename)
+        data = _load_matfile_ltv73(local_filename)
     except NotImplementedError:
-        data = load_matfile_gev73(local_filename)
+        data = _load_matfile_gev73(local_filename)
 
     return MatrixSVDs(**data)
 
