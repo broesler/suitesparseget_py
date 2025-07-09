@@ -9,8 +9,6 @@
 
 import suitesparseget as ssg
 
-# import csparse
-
 
 if __name__ == "__main__":
     # Get the entire index

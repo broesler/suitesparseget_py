@@ -4,7 +4,7 @@
 #  Created: 2025-06-10 12:28
 #   Author: Bernie Roesler
 #
-"""Example script to demonstrat the csparse.suitesparseget submodule.
+"""Example script to demonstrate the use of `suitesparseget` with `csparse`.
 
 This script gets the index file of the SuiteSparse Matrix Collection,
 and then loads in all symmetric non-binary matrices, in increasing order of
@@ -18,9 +18,8 @@ CSparse/MATLAB/ssget/ssget_example.m
 
 import matplotlib.pyplot as plt
 
-from csparse.tests import suitesparseget as ssg
-
 import csparse
+import suitesparseget as ssg
 
 
 # Load the index
