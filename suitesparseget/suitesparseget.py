@@ -668,7 +668,10 @@ def get_row(index=None, mat_id=None, group=None, name=None):
         row['group'] = group
         row['name'] = name
 
-    # TODO ensure row is unique
+    # Ensure row is unique
+    if not isinstance(row, pd.Series):
+        raise ValueError(f"Multiple rows found for group={group}, "
+                         f"name={name}. Please specify a unique pair.")
 
     return row
 
