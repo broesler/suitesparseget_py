@@ -203,8 +203,14 @@ def _download_file(url, path):
         raise e
 
 
-def get_index():
+def get_index(force_download=False):
     """Download the SuiteSparse index file load it into a DataFrame.
+
+    Parameters
+    ----------
+    force_download : bool, optional
+        If True, force re-download of the index file even if it exists locally.
+        Default is False.
 
     Returns
     -------
@@ -213,7 +219,7 @@ def get_index():
     """
     index_mat = SS_DIR / "ss_index.mat"
 
-    if not index_mat.exists():
+    if force_download or not index_mat.exists():
         _download_file(SS_INDEX_URL, index_mat)
 
     mat = loadmat(index_mat)
@@ -310,11 +316,17 @@ def get_index():
     return df
 
 
-def get_stats():
+def get_stats(force_download=False):
     """Download the SuiteSparse statistics file and load it into a DataFrame.
 
     .. note:: The statistics file is not used in the CSparse testing.
               It is only used by the ``ssget`` Java application.
+
+    Parameters
+    ----------
+    force_download : bool, optional
+        If True, force re-download of the statistics file even if it exists
+        locally. Default is False.
 
     Returns
     -------
@@ -325,7 +337,7 @@ def get_stats():
     # Load the secondary index from the CSV file
     stats_csv = SS_DIR / "ssstats.csv"
 
-    if not stats_csv.exists():
+    if force_download or not stats_csv.exists():
         SS_DIR.mkdir(parents=True, exist_ok=True)
         _download_file(SSSTATS_CSV_URL, stats_csv)
 
